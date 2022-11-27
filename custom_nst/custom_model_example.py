@@ -1,6 +1,7 @@
 from custom_stylization_model import CustomStylizationModel
 import tensorflow as tf
 
+# create a custom NST model and initialize parameters
 model = CustomStylizationModel(
     'content.jpg',
     'style.jpg',
@@ -12,5 +13,9 @@ model = CustomStylizationModel(
     n_iter=1000,
     opt=tf.optimizers.Adam(learning_rate=0.02, beta_1=0.99, epsilon=1e-1)
 )
+
+# compose resulting image
 result = model.compose()
+
+# save resulting image
 result.save('result.jpg')

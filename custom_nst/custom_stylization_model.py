@@ -3,7 +3,15 @@ import numpy as np
 import PIL.Image
 
 class StyleContentModel(tf.keras.models.Model):
+    """Model that uses VGG19 to compute style and content tensors."""
+
     def __init__(self, style_layers, content_layers):
+        """ Initializes the model and parameters.
+            Args:
+                style_layers: List of layer names to use for style.
+                content_layers: List of layer names to use for content. 
+        """
+
         super(StyleContentModel, self).__init__()
         self.vgg = self.vgg_layers(style_layers + content_layers)
         self.style_layers = style_layers
@@ -12,21 +20,43 @@ class StyleContentModel(tf.keras.models.Model):
         self.vgg.trainable = False
 
     def vgg_layers(self, layer_names):
+        """ Creates a vgg model that returns a list of intermediate output values.
+            Args:
+                layer_names: List of layer names to use for style.
+            Returns:
+                Model that takes image inputs and outputs the style and content intermediate layers.
+        """
+
         vgg = tf.keras.applications.VGG19(include_top=False, weights='imagenet')
         vgg.trainable = False
 
+        # make a model that returns the intermediate layer outputs
         outputs = [vgg.get_layer(name).output for name in layer_names]
-
         model = tf.keras.Model([vgg.input], outputs)
+
         return model
 
     def gram_matrix(self, input_tensor):
+        """ Computes the gram matrix of an input tensor.
+            Args:
+                input_tensor: Tensor to compute the gram matrix of.
+            Returns:
+                Gram matrix of the input tensor.
+        """
+
         result = tf.linalg.einsum('bijc,bijd->bcd', input_tensor, input_tensor)
         input_shape = tf.shape(input_tensor)
         num_locations = tf.cast(input_shape[1]*input_shape[2], tf.float32)
         return result / (num_locations)
 
     def call(self, inputs):
+        """ Computes the style and content tensors for the given input.
+            Args:
+                inputs: Input tensor to compute the style and content tensors for. Expects float input in [0,1]           
+            Returns:
+                Style and content tensors.
+        """
+
         inputs = inputs * 255.0
         preprocessed_input = tf.keras.applications.vgg19.preprocess_input(inputs)
         outputs = self.vgg(preprocessed_input)
@@ -48,11 +78,11 @@ class StyleContentModel(tf.keras.models.Model):
 
 
 class CustomStylizationModel:
+    """Custom style transfer model"""
+
     def __init__(
         self,
-        # content_image,
         content_image_path,
-        # style_image,
         style_image_path,
         content_layers=['block5_conv2'],
         style_layers=['block1_conv1', 'block2_conv1', 'block3_conv1', 'block4_conv1', 'block5_conv1'],
@@ -62,6 +92,10 @@ class CustomStylizationModel:
         n_iter=1000,
         opt=tf.optimizers.Adam(learning_rate=0.02, beta_1=0.99, epsilon=1e-1)
     ):
+        """ Initializes the model and parameters.
+            Args:
+                content_image_path: Path to the content image.
+        """
 
         self.content_layers = content_layers
         self.style_layers = style_layers
@@ -76,6 +110,11 @@ class CustomStylizationModel:
         self.style_image_path = style_image_path
     
     def compose(self):
+        """ Composes stylized image from the content and style images.
+            Returns:
+                Stylized image.
+        """
+
         content_image = self.load_img(self.content_image_path)
         style_image = self.load_img(self.style_image_path)
 
@@ -91,6 +130,12 @@ class CustomStylizationModel:
 
 
     def style_content_loss(self, outputs):
+        """ Computes the total loss.
+            Args:
+                outputs: Style and content tensors.
+            Returns:
+                Total loss.
+        """
         style_outputs = outputs['style']
         content_outputs = outputs['content']
         style_loss = tf.add_n([tf.reduce_mean((style_outputs[name]-self.style_targets[name])**2) 
@@ -104,6 +149,13 @@ class CustomStylizationModel:
         return loss
 
     def load_img(self, path_to_img):
+        """ Loads an image from the given path.
+            Args:
+                path_to_img: Path to the image.
+            Returns:
+                Image tensorflow tensor.
+        """
+
         max_dim = 512
         img = tf.io.read_file(path_to_img)
         img = tf.image.decode_image(img, channels=3)
@@ -121,6 +173,11 @@ class CustomStylizationModel:
 
     @tf.function()
     def train_step(self, image):
+        """ Performs a single optimization step on the image.
+            Args:
+                image: Image to perform the training step on.
+        """
+
         with tf.GradientTape() as tape:
             outputs = self.extractor(image)
             loss = self.style_content_loss(outputs)
@@ -135,6 +192,13 @@ class CustomStylizationModel:
         )
     
     def tensor_to_image(self, tensor):
+        """ Converts a tensor to an image.
+            Args:
+                tensor: Tensor to convert to an image.
+            Returns:
+                PIL Image.
+        """
+
         tensor = tensor*255
         tensor = np.array(tensor, dtype=np.uint8)
         if np.ndim(tensor)>3:
